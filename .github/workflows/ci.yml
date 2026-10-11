@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build (release)
+        run: make build
+      - name: Type-check the icon generator
+        # `make app` only runs this script when Support/AppIcon.png exists,
+        # so compile it explicitly to keep it covered either way.
+        run: swiftc -typecheck scripts/make-icon.swift
+      - name: Assemble app bundle
+        run: make app
+      - name: Unit tests
+        run: make test
