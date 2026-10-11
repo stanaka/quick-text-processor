@@ -56,6 +56,56 @@ make clean
 make cert    # one-time: create a stable dev signing identity (see below)
 ```
 
+### DMG builds and releases
+
+Build a release disk image locally on macOS:
+
+```sh
+make dmg VERSION=0.1.0
+```
+
+This builds an **Apple Silicon (arm64)** app in release configuration, stamps
+both bundle version fields with `0.1.0`, signs it ad-hoc, and creates
+`build/QuickTextProcessor-0.1.0-arm64.dmg`. The image contains the app and an
+Applications shortcut for drag-and-drop installation. Packaging also verifies
+the disk image, architecture, macOS 14 deployment target, version, signature,
+icon, and bundled resources. Versions must be `X.Y.Z` with no leading zeros.
+
+For ordinary app builds, `make app VERSION=0.1.0 ARCH=arm64` optionally overrides
+the bundle version and build architecture. Omitting these retains the checked-in
+plist version and SwiftPM's native build architecture.
+
+To publish a release, commit and push the release changes, then tag that commit:
+
+```sh
+git tag -a v0.1.0 -m "QuickTextProcessor 0.1.0"
+git push origin v0.1.0
+```
+
+The **Release** GitHub Actions workflow accepts stable `vX.Y.Z` tags only. It
+runs tests and packaging checks on an Apple Silicon macOS runner, creates a
+draft GitHub Release with generated notes, uploads the DMG, and publishes after
+confirming the upload. It uses the built-in GitHub token with `contents: write`;
+no additional secrets are required.
+
+If a run fails, fix the underlying issue and rerun it from GitHub Actions when
+the tagged source is still correct. A rerun resumes an existing draft and
+replaces its DMG. Published releases are left untouched and cause the run to
+fail explicitly. If a source change is required, commit it and publish a new
+version tag rather than moving an existing tag.
+
+These DMGs support **Apple Silicon Macs running macOS 14 or later**. They are
+ad-hoc signed and **not notarized**. After downloading, drag the app to
+Applications, attempt to open it, then use **System Settings → Privacy &
+Security → Open Anyway** if macOS blocks it. Grant Accessibility as described
+below. Developer ID signing, notarization, Intel builds, prereleases, and
+automatic updates are not included in this release flow.
+
+For the first published release, download the actual GitHub asset on an Apple
+Silicon Mac and check installation, launch, the icon, bundled resources, and
+the Accessibility permission flow. CI verifies the package but does not perform
+interactive installation or launch checks.
+
 ### App icon
 
 `Support/AppIcon.png` is the master artwork and the only thing you need to

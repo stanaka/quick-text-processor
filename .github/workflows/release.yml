@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate version tag
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" == v* ]]
+          VERSION="${RELEASE_TAG#v}"
+          bash scripts/validate-version.sh "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Check build environment
+        run: |
+          test "$(uname -m)" = arm64
+          swift --version
+          xcodebuild -version
+      - name: Unit tests
+        run: make test
+      - name: Type-check icon generator
+        run: swiftc -typecheck scripts/make-icon.swift
+      - name: Build and verify DMG
+        run: make dmg VERSION="$VERSION"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Listing distinguishes a missing release from an authentication/API failure.
+          RELEASE_ID=$(gh api --paginate "repos/$GH_REPO/releases" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")
+          if [[ -n "$RELEASE_ID" ]]; then
+            IS_DRAFT=$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json isDraft --jq .isDraft)
+            if [[ "$IS_DRAFT" != true ]]; then
+              echo "error: release $RELEASE_TAG is already published; leaving it untouched" >&2
+              exit 1
+            fi
+          else
+            gh release create "$RELEASE_TAG" --repo "$GH_REPO" \
+              --verify-tag --draft --title "QuickTextProcessor $VERSION" --generate-notes
+          fi
+          ASSET="QuickTextProcessor-$VERSION-arm64.dmg"
+          gh release upload "$RELEASE_TAG" "build/$ASSET" --repo "$GH_REPO" --clobber
+          ASSET_SIZE=$(stat -f %z "build/$ASSET")
+          UPLOADED_SIZE=$(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets \
+            --jq ".assets[] | select(.name == \"$ASSET\") | .size")
+          test "$UPLOADED_SIZE" = "$ASSET_SIZE"
+          gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --verify-tag --draft=false

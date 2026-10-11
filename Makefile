@@ -2,6 +2,7 @@
 #
 #   make build   - compile (swift build)
 #   make app     - assemble build/QuickTextProcessor.app
+#   make dmg VERSION=0.1.0 - package an arm64 release disk image
 #   make icon    - regenerate build/AppIcon.icns from Support/AppIcon.png
 #   make run     - build, assemble and launch the app
 #   make test    - run unit tests (QTPCore)
@@ -16,7 +17,10 @@
 
 APP      := QuickTextProcessor
 CONFIG   ?= release
-BINDIR   := .build/$(CONFIG)
+ARCH     ?=
+VERSION  ?=
+SWIFT_BUILD_FLAGS = -c $(CONFIG) $(if $(ARCH),--arch $(ARCH))
+BINDIR   = $(shell swift build $(SWIFT_BUILD_FLAGS) --show-bin-path)
 BUNDLE   := build/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
 ICON_SRC := Support/AppIcon.png
@@ -25,10 +29,10 @@ ICON_OUT := build/AppIcon.icns
 IDENTITY ?=
 DEV_CERT := QuickTextProcessor Dev
 
-.PHONY: build app icon run test clean cert
+.PHONY: build app icon run test clean cert dmg
 
 build:
-	swift build -c $(CONFIG)
+	swift build $(SWIFT_BUILD_FLAGS)
 
 # Regenerated only when the master artwork or the generator changes.
 $(ICON_OUT): $(ICON_SRC) scripts/make-icon.swift
@@ -41,6 +45,11 @@ app: build $(if $(wildcard $(ICON_SRC)),$(ICON_OUT))
 	rm -rf "$(BUNDLE)"
 	mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Resources"
 	cp Support/Info.plist "$(CONTENTS)/Info.plist"
+	@if [ -n "$(VERSION)" ]; then \
+		bash scripts/validate-version.sh "$(VERSION)" && \
+		/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(VERSION)" "$(CONTENTS)/Info.plist" && \
+		/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(VERSION)" "$(CONTENTS)/Info.plist"; \
+	fi
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	cp "$(BINDIR)/$(APP)" "$(CONTENTS)/MacOS/$(APP)"
 	@# SwiftPM puts target resources into *.bundle next to the binary;
@@ -79,6 +88,12 @@ app: build $(if $(wildcard $(ICON_SRC)),$(ICON_OUT))
 run: app
 	@pkill -x $(APP) >/dev/null 2>&1 || true
 	open "$(BUNDLE)"
+
+dmg:
+	bash scripts/validate-version.sh "$(VERSION)"
+	$(MAKE) app CONFIG=release ARCH=arm64 VERSION="$(VERSION)" IDENTITY=-
+	bash scripts/package-dmg.sh "$(BUNDLE)" "$(VERSION)"
+	bash scripts/verify-dmg.sh "build/$(APP)-$(VERSION)-arm64.dmg" "$(VERSION)"
 
 test:
 	swift test
