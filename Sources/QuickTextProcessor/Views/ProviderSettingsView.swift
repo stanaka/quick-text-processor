@@ -111,6 +111,7 @@ struct ProviderSettingsView: View {
         case .openAICompatible: name = "OpenAI-compatible"
         case .codexOAuth: name = "ChatGPT (Codex)"
         case .xaiOAuth: name = "Grok (xAI)"
+        case .claudeCode: name = "Claude Code"
         }
         let profile = ProviderProfile(name: name, type: type, baseURL: baseURL)
         settings.upsert(profile)
@@ -137,6 +138,8 @@ struct ProviderSettingsView: View {
             }
 
             switch profile.type {
+            case .claudeCode:
+                claudeCodeSection(profile)
             case .openAICompatible:
                 apiKeySection(profile)
             case .codexOAuth:
@@ -180,7 +183,7 @@ struct ProviderSettingsView: View {
             }
             if busy {
                 ProgressView().controlSize(.small)
-            } else {
+            } else if profile.type != .claudeCode {
                 Button {
                     fetchModels(profile)
                 } label: {
@@ -197,9 +200,45 @@ struct ProviderSettingsView: View {
     private func modelCandidates(_ profile: ProviderProfile) -> [String]? {
         if let fetched = fetchedModels[profile.id] { return fetched }
         switch profile.type {
+        case .claudeCode: return ["sonnet", "opus", "haiku"]
         case .openAICompatible: return nil
         case .codexOAuth: return CodexWire.fallbackModelCandidates
         case .xaiOAuth: return XAIWire.fallbackModelCandidates
+        }
+    }
+
+    private func claudeCodeSection(_ profile: ProviderProfile) -> some View {
+        Section("Claude Code installation") {
+            TextField("Executable path (automatic when empty)", text: Binding(
+                get: { settings.profile(withID: profile.id)?.executablePath ?? "" },
+                set: { value in
+                    guard var updated = settings.profile(withID: profile.id) else { return }
+                    updated.executablePath = value.isEmpty ? nil : value
+                    settings.upsert(updated)
+                }
+            ))
+            .autocorrectionDisabled()
+            Text("Install Claude Code and sign in in Terminal with claude auth login. Requests use the CLI's configured account and billing mode. Tools and local customizations are disabled for text processing.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Link("Claude Code setup", destination: URL(string: "https://code.claude.com/docs/en/quickstart")!)
+            Button("Check installation") {
+                busy = true
+                flowError = nil
+                flowInfo = nil
+                Task {
+                    do {
+                        let path = try ClaudeCodeRunner.resolveExecutable(profile.executablePath)
+                        let version = try await ClaudeCodeRunner.checkInstallation(executablePath: path.path)
+                        if selectionID == profile.id { flowInfo = "\(version) · \(path.path)" }
+                    } catch {
+                        if selectionID == profile.id { flowError = friendlyErrorMessage(error) }
+                    }
+                    busy = false
+                }
+            }
+            .disabled(busy)
+            feedback
         }
     }
 
