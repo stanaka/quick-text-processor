@@ -39,6 +39,12 @@ final class AppController: ObservableObject {
     }
 
     func start() {
+        resultController.onDismiss = { [weak self] in
+            guard let self, self.resultController.model.isStreaming else { return }
+            self.hotkeyRun?.cancel()
+            self.hotkeyRun = nil
+            self.resultController.model.finish()
+        }
         hotkeyManager.onHotkey = { [weak self] in
             guard let self else { return }
             Task { await self.hotkeyPressed() }
@@ -416,6 +422,8 @@ final class AppController: ObservableObject {
                                       apiKey: Keychain.apiKey(profileID: profile.id) ?? "")
         case .codexOAuth:
             return CodexClient(profile: profile, manager: tokenManager(for: profile))
+        case .claudeCode:
+            return ClaudeCodeClient(profile: profile)
         case .xaiOAuth:
             return XAIClient(profile: profile, manager: tokenManager(for: profile))
         }
@@ -438,7 +446,7 @@ final class AppController: ObservableObject {
             tokens = try await CodexAuthFlow.signIn()
         case .xaiOAuth:
             tokens = try await XAIAuthFlow.signIn()
-        case .openAICompatible:
+        case .openAICompatible, .claudeCode:
             throw AuthFlowError.notAnOAuthProvider
         }
         await tokenManager(for: profile).store(tokens)
@@ -462,7 +470,7 @@ final class AppController: ObservableObject {
                 throw AuthFlowError.cliCredentialsNotFound(fileURL.path)
             }
             tokens = XAIWire.importCLITokens(json: data)
-        case .openAICompatible:
+        case .openAICompatible, .claudeCode:
             throw AuthFlowError.notAnOAuthProvider
         }
         guard let tokens else {
@@ -487,6 +495,8 @@ final class AppController: ObservableObject {
     func fetchModelCandidates(profile: ProviderProfile,
                               apiKeyOverride: String? = nil) async throws -> [String] {
         switch profile.type {
+        case .claudeCode:
+            return ["sonnet", "opus", "haiku"]
         case .openAICompatible:
             let apiKey = apiKeyOverride ?? Keychain.apiKey(profileID: profile.id) ?? ""
             let request = try OpenAICompatWire.modelsRequest(baseURL: profile.baseURL,

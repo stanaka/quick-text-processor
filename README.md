@@ -29,11 +29,12 @@ project, no third-party dependencies.
   - **Dictionary** — a glossary injected into prompts ({{glossary}}),
   - **Settings** — hotkey, providers, prompt templates, capture and history
     options, launch at login.
-- **Three provider types** (any number of profiles):
+- **Four provider types** (any number of profiles):
   - `openai-compatible` — any `/v1/chat/completions` endpoint (OpenAI, xAI
     api.x.ai, Ollama, LM Studio, OpenRouter, …) with an API key,
   - `codex-oauth` — your ChatGPT subscription via the same OAuth flow and
     backend as the Codex CLI (sign in in-app, or import `~/.codex/auth.json`),
+  - `claude-code` — the locally installed `claude -p`, using its existing login,
   - `xai-oauth` — your SuperGrok subscription via the grok CLI's OAuth flow
     (sign in in-app, or import `~/.grok/auth.json`).
 - API keys and OAuth tokens live only in the macOS Keychain. The CLIs'
@@ -178,7 +179,25 @@ Open **Settings → Providers** in the main window.
   *Import from Grok CLI*. Default model: `grok-4.6`. Requires a SuperGrok
   subscription.
 
-The refresh button next to the model field fetches the provider's current
+- **Claude Code (CLI)**: install [Claude Code](https://code.claude.com/docs/en/quickstart)
+  and run `claude auth login` in Terminal, choosing your subscription account.
+  Add a Claude Code profile and use **Check installation**. The app searches
+  `PATH`, `~/.local/bin`, `/opt/homebrew/bin`, and `/usr/local/bin`; set an
+  absolute executable path for other installations. Default model: `sonnet`,
+  with `opus` and `haiku` suggestions and free-text model IDs.
+
+Claude requests stream through `claude -p` in a fresh temporary directory,
+with tools and local customizations disabled and session persistence off.
+The CLI manages authentication; the app does not import Claude credentials.
+The CLI's configured account and billing mode apply. Use a current Claude Code
+version supporting `--safe-mode`, `--no-session-persistence`, and streaming
+partial messages. See the [headless documentation](https://code.claude.com/docs/en/headless).
+**Check installation** checks the executable and version, not authentication.
+If a request reports an authentication error, sign in again in Terminal.
+If a flag is unsupported, update Claude Code. Requests time out after three
+minutes; Stop or dismissing an active run terminates its subprocess.
+
+For the HTTP providers, the refresh button next to the model field fetches the provider's current
 model list (`GET …/v1/models` for OpenAI-compatible endpoints, the CLI
 catalog endpoints for Codex/Grok) into a picker menu; free-text entry
 always stays possible for models the list doesn't carry.

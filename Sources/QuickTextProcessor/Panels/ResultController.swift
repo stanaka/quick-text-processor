@@ -15,6 +15,7 @@ final class ResultController: NSObject, NSWindowDelegate {
     /// Wired by AppController for the current run.
     var onInsert: ((String) -> Void)?
     var onRetry: (() -> Void)?
+    var onDismiss: (() -> Void)?
 
     private var panel: NSPanel?
     private var keyMonitor: Any?
@@ -40,6 +41,7 @@ final class ResultController: NSObject, NSWindowDelegate {
     }
 
     func hide() {
+        onDismiss?()
         endConfirmation()
         panel?.orderOut(nil)
     }
@@ -133,6 +135,11 @@ final class ResultController: NSObject, NSWindowDelegate {
     }
 
     // MARK: - NSWindowDelegate
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hide()
+        return false
+    }
 
     /// Click-away while waiting: hand the keyboard back to the target app but
     /// keep the panel (and the answer) visible for the buttons.

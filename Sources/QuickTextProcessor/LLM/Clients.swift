@@ -62,7 +62,7 @@ actor OAuthTokenManager {
             request = CodexWire.refreshRequest(refreshToken: refreshToken)
         case .xaiOAuth:
             request = XAIWire.refreshRequest(refreshToken: refreshToken)
-        case .openAICompatible:
+        case .openAICompatible, .claudeCode:
             throw LLMError.invalidConfiguration("API-key profiles have no OAuth tokens")
         }
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -76,7 +76,7 @@ actor OAuthTokenManager {
             refreshed = CodexWire.tokens(fromTokenResponse: data, existing: tokens)
         case .xaiOAuth:
             refreshed = XAIWire.tokens(fromTokenResponse: data, existing: tokens)
-        case .openAICompatible:
+        case .openAICompatible, .claudeCode:
             refreshed = nil
         }
         guard let refreshed else {
@@ -92,7 +92,7 @@ actor OAuthTokenManager {
             return "Not signed in. Open Settings → Providers and sign in with your ChatGPT account (or import the Codex CLI login)."
         case .xaiOAuth:
             return "Not signed in. Open Settings → Providers and sign in with your xAI account (or import the Grok CLI login)."
-        case .openAICompatible:
+        case .openAICompatible, .claudeCode:
             return "This profile uses an API key, not OAuth."
         }
     }
@@ -180,4 +180,16 @@ final class XAIClient: LLMClient {
 enum AppVersion {
     static let short: String =
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.1.0"
+}
+
+struct ClaudeCodeClient: LLMClient {
+    let profile: ProviderProfile
+    var providerName: String { profile.name }
+    var modelName: String { profile.model }
+
+    func stream(prompt: String) async throws -> AsyncThrowingStream<LLMStreamEvent, Error> {
+        try Task.checkCancellation()
+        return try ClaudeCodeRunner.start(prompt: prompt, model: profile.model,
+                                          executablePath: profile.executablePath)
+    }
 }

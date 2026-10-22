@@ -6,23 +6,26 @@ public enum ProviderType: String, Codable, CaseIterable, Sendable {
     case openAICompatible = "openai-compatible"
     case codexOAuth = "codex-oauth"
     case xaiOAuth = "xai-oauth"
+    case claudeCode = "claude-code"
 
     public var displayName: String {
         switch self {
         case .openAICompatible: return "OpenAI-compatible (API key)"
         case .codexOAuth: return "Codex (ChatGPT account)"
         case .xaiOAuth: return "xAI (Grok account)"
+        case .claudeCode: return "Claude Code (CLI)"
         }
     }
 
-    /// Whether this provider authenticates with OAuth tokens (vs. an API key).
-    public var usesOAuth: Bool { self != .openAICompatible }
+    /// Whether the app manages OAuth tokens for this provider.
+    public var usesOAuth: Bool { self == .codexOAuth || self == .xaiOAuth }
 
     public var defaultModel: String {
         switch self {
         case .openAICompatible: return "gpt-4o-mini"
         case .codexOAuth: return "gpt-5.6-sol"
         case .xaiOAuth: return "grok-4.6"
+        case .claudeCode: return "sonnet"
         }
     }
 }
@@ -34,20 +37,24 @@ public struct ProviderProfile: Codable, Identifiable, Hashable, Sendable {
     public var name: String
     public var type: ProviderType
     /// Base URL for `openAICompatible` (e.g. "https://api.openai.com").
-    /// Ignored by the OAuth providers, which use fixed endpoints.
+    /// Ignored by OAuth providers and the Claude Code CLI.
     public var baseURL: String
     public var model: String
+    /// Optional absolute CLI executable path; nil means automatic discovery.
+    public var executablePath: String?
 
     public init(id: UUID = UUID(),
                 name: String,
                 type: ProviderType,
                 baseURL: String = "https://api.openai.com",
-                model: String? = nil) {
+                model: String? = nil,
+                executablePath: String? = nil) {
         self.id = id
         self.name = name
         self.type = type
         self.baseURL = baseURL
         self.model = model ?? type.defaultModel
+        self.executablePath = executablePath
     }
 }
 
